@@ -1,0 +1,27 @@
+build/
+cmake-build-*/
+.cache/
+*.o
+*.a
+*.dylib
+*.so
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Run artifacts
+runs/
+logs/
+checkpoints/*.csv
+checkpoints/*.pt
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
