@@ -1,0 +1,37 @@
+# Peg-in-hole experiment config.
+# Used by run_sim to set up the SCL world plus the controller gains.
+
+robot: kuka_iiwa
+world_file: world/peg_in_hole.urdf
+control_rate_hz: 1000
+
+osc_gains:
+  kp: 400.0
+  kv: 40.0
+  kp_post: 50.0
+  kv_post: 14.0
+  k_lim: 200.0
+
+sensor_attention:
+  delta_hysteresis: 0.05
+  min_ticks_in_mode: 50
+
+eye_in_hand:
+  focal_length_px: 600.0
+  principal_point_x_px: 320.0
+  principal_point_y_px: 240.0
+  marker_diameter_m: 0.03
+  detect_threshold: 0.6
+
+forward_model:
+  vision_ckpt: checkpoints/forward_model_vision.csv
+  force_ckpt:  checkpoints/forward_model_force.csv
+
+episode:
+  max_seconds: 30.0
+  success_radius_m: 0.005
+  workspace_x_m: [0.3, 0.6]
+  workspace_y_m: [-0.15, 0.15]
+  workspace_yaw_rad: [-0.3, 0.3]
+
+seeds: [42, 1337, 2024]
