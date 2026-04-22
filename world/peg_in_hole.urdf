@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<robot name="peg_in_hole_world">
+  <!--
+    SCL-style world for the peg-in-hole task. The Kuka iiwa URDF is
+    included by reference from the lab-provided robot description
+    package (see configs/peg_in_hole.yaml -> robot: kuka_iiwa).
+    This file specifies the static scene only: table, hole fixture,
+    peg attached to the gripper.
+
+    The hole is centered at (x, y, z) = (0.45, 0.0, 0.85) with a
+    radius of 4 mm. The peg is a cylinder of radius 3.4 mm, giving
+    the 6 mm clearance specified in docs/proposal.md.
+  -->
+  <link name="table">
+    <visual>
+      <geometry><box size="1.0 1.0 0.05"/></geometry>
+      <origin xyz="0 0 0.825"/>
+    </visual>
+    <collision>
+      <geometry><box size="1.0 1.0 0.05"/></geometry>
+      <origin xyz="0 0 0.825"/>
+    </collision>
+    <inertial>
+      <mass value="20.0"/>
+      <inertia ixx="1.0" iyy="1.0" izz="1.0" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <link name="hole_fixture">
+    <visual>
+      <geometry><cylinder radius="0.05" length="0.05"/></geometry>
+      <origin xyz="0.45 0.0 0.875"/>
+    </visual>
+    <collision>
+      <geometry><cylinder radius="0.05" length="0.05"/></geometry>
+      <origin xyz="0.45 0.0 0.875"/>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" iyy="0.01" izz="0.01" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="table_to_world" type="fixed">
+    <parent link="world"/>
+    <child link="table"/>
+    <origin xyz="0 0 0"/>
+  </joint>
+
+  <joint name="hole_to_table" type="fixed">
+    <parent link="table"/>
+    <child link="hole_fixture"/>
+    <origin xyz="0 0 0"/>
+  </joint>
+</robot>
