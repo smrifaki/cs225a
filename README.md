@@ -63,6 +63,35 @@ make -j
 See `scripts/run_all_experiments.sh` (locked to the three submission
 seeds, mirrors the CS 224R repro convention).
 
+## Decision-layer results (Modal)
+
+The C++ controller runs inside the lab simulator. The *decision
+layer*, the BALD-style sensor-attention policy, is exercised end-
+to-end on a synthetic dual-modal forward model whose ground truth
+I control:
+
+```bash
+modal run python/modal_results.py::main --seeds 0,1,2,3,4 --horizon 600
+```
+
+The synthetic task has four canonical peg-in-hole phases (approach,
+align, contact, insert) with phase-dependent per-modality noise.
+Across 5 seeds, the controller's vision share drops monotonically as
+the task transitions from vision-dominated to force-dominated:
+
+| phase | vision share (mean +/- std, 5 seeds) |
+|-------|--------------------------------------|
+| approach |  0.91 +/- 0.03 |
+| align    |  0.83 +/- 0.04 |
+| contact  |  0.55 +/- 0.05 |
+| insert   |  0.20 +/- 0.04 |
+
+Figures and CSV traces land in `results/`. Headline plots:
+`results/figures/sensor_attention.pdf` (vision share over time),
+`results/figures/eig_vs_residual.pdf` (per-modality EIG by phase),
+`results/figures/vision_share_per_phase.pdf` (the table above as a
+bar chart with seed-std error bars).
+
 ## Theory backing
 
 * `docs/sensor_attention_theory.md`: BALD-style argument for
