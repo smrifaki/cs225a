@@ -32,33 +32,31 @@ def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
 
     rng = np.random.default_rng(seed)
 
-    # Phase model. The peg-in-hole task has four canonical phases:
-    # approach (vision-dominant), align (vision still informative),
-    # contact (force becomes informative as vision saturates), insert
-    # (force dominant). The ground-truth per-modality precision is
-    # phase-dependent; the controller does not see the phase label.
+    # Phase model. The peg-in-hole task has four canonical phases.
+    # Three modalities: vision (eye-in-hand camera), force (wrist FT
+    # sensor), proprioception (joint encoders). The ground-truth
+    # per-modality residual scale is phase-dependent; the controller
+    # does not see the phase label.
+    #
+    # phase tuple = (name, start, end, sigma_vision, sigma_force, sigma_proprio)
     phases = [
-        ("approach", 0,   150, 1.4, 0.4),
-        ("align",    150, 280, 1.1, 0.7),
-        ("contact",  280, 420, 0.7, 1.3),
-        ("insert",   420, horizon, 0.4, 1.7),
+        ("approach", 0,   150, 1.4, 0.4, 0.5),
+        ("align",    150, 280, 1.1, 0.7, 1.2),
+        ("contact",  280, 420, 0.7, 1.3, 0.9),
+        ("insert",   420, horizon, 0.4, 1.7, 0.6),
     ]
 
-    # Forward dynamics: 2D feature per modality. Vision feature
-    # variance = sigma_v^2; force feature variance = sigma_f^2. Each
-    # tick the controller has a learned Bayesian forward model with
-    # running posterior precision per modality. We initialize the
-    # model precision uniform across modalities and update it with
-    # each observation. The "true" task uncertainty is the entropy
-    # of the joint posterior.
-    prior_var_v = 1.0
-    prior_var_f = 1.0
-    var_v, var_f = prior_var_v, prior_var_f
+    # Forward dynamics: 1D feature per modality. Each tick the
+    # controller has a learned Bayesian forward model with running
+    # posterior precision per modality. Posterior precision starts
+    # uniform across modalities and updates with each observation.
+    var = {"vision": 1.0, "force": 1.0, "proprio": 1.0}
 
     # BALD-style expected information gain: pick the modality with
     # the larger expected entropy drop, ~ residual^2 / posterior_var,
     # softmaxed to keep some exploration.
     beta = 6.0
+    modalities = ["vision", "force", "proprio"]
 
     rows: list[dict[str, Any]] = []
     phase_idx = 0
@@ -66,67 +64,74 @@ def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
         # advance the phase pointer
         while phase_idx + 1 < len(phases) and t >= phases[phase_idx][2]:
             phase_idx += 1
-        name, _, _, true_v, true_f = phases[phase_idx]
+        name, _, _, sv, sf, sp = phases[phase_idx]
 
-        # ground-truth residuals (the magnitude of "what the forward
-        # model would be wrong by if it stayed at the prior")
-        r_v = rng.normal(0.0, true_v)
-        r_f = rng.normal(0.0, true_f)
+        # ground-truth residuals per modality
+        r = {
+            "vision":  rng.normal(0.0, sv),
+            "force":   rng.normal(0.0, sf),
+            "proprio": rng.normal(0.0, sp),
+        }
 
         # expected information gain per modality, ignoring constants
-        eig_v = 0.5 * np.log1p(r_v ** 2 / max(var_v, 1e-3))
-        eig_f = 0.5 * np.log1p(r_f ** 2 / max(var_f, 1e-3))
+        eig = {
+            m: 0.5 * np.log1p(r[m] ** 2 / max(var[m], 1e-3))
+            for m in modalities
+        }
 
         # softmax pick
-        logits = beta * np.array([eig_v, eig_f])
+        logits = beta * np.array([eig[m] for m in modalities])
         probs = np.exp(logits - logits.max())
         probs /= probs.sum()
-        pick = int(rng.choice(2, p=probs))
+        pick_idx = int(rng.choice(len(modalities), p=probs))
+        picked = modalities[pick_idx]
 
         # update posterior precision of the picked modality
-        if pick == 0:
-            var_v = 1.0 / (1.0 / var_v + 1.0)
-        else:
-            var_f = 1.0 / (1.0 / var_f + 1.0)
+        var[picked] = 1.0 / (1.0 / var[picked] + 1.0)
 
-        rows.append(
-            {
-                "step": t,
-                "phase": name,
-                "residual_vision": float(r_v),
-                "residual_force": float(r_f),
-                "eig_vision": float(eig_v),
-                "eig_force": float(eig_f),
-                "pick": "vision" if pick == 0 else "force",
-                "var_vision_post": float(var_v),
-                "var_force_post": float(var_f),
-            }
-        )
+        rows.append({
+            "step": t,
+            "phase": name,
+            "residual_vision":   float(r["vision"]),
+            "residual_force":    float(r["force"]),
+            "residual_proprio":  float(r["proprio"]),
+            "eig_vision":   float(eig["vision"]),
+            "eig_force":    float(eig["force"]),
+            "eig_proprio":  float(eig["proprio"]),
+            "pick": picked,
+            "var_vision_post":  float(var["vision"]),
+            "var_force_post":   float(var["force"]),
+            "var_proprio_post": float(var["proprio"]),
+        })
 
     # per-phase summary
     summary: list[dict[str, Any]] = []
-    for name, lo, hi, true_v, true_f in phases:
+    for name, lo, hi, sv, sf, sp in phases:
         chunk = rows[lo:hi]
         if not chunk:
             continue
-        n_v = sum(1 for r in chunk if r["pick"] == "vision")
-        n_f = len(chunk) - n_v
-        eig_v_mean = float(np.mean([r["eig_vision"] for r in chunk]))
-        eig_f_mean = float(np.mean([r["eig_force"] for r in chunk]))
-        summary.append(
-            {
-                "phase": name,
-                "steps": len(chunk),
-                "true_sigma_vision": true_v,
-                "true_sigma_force": true_f,
-                "vision_picks": n_v,
-                "force_picks": n_f,
-                "vision_share": n_v / len(chunk),
-                "force_share": n_f / len(chunk),
-                "mean_eig_vision": eig_v_mean,
-                "mean_eig_force": eig_f_mean,
-            }
-        )
+        n = len(chunk)
+        picks = {m: sum(1 for r in chunk if r["pick"] == m) for m in modalities}
+        eig_means = {
+            m: float(np.mean([r[f"eig_{m}"] for r in chunk]))
+            for m in modalities
+        }
+        summary.append({
+            "phase": name,
+            "steps": n,
+            "true_sigma_vision": sv,
+            "true_sigma_force": sf,
+            "true_sigma_proprio": sp,
+            "vision_picks":  picks["vision"],
+            "force_picks":   picks["force"],
+            "proprio_picks": picks["proprio"],
+            "vision_share":  picks["vision"] / n,
+            "force_share":   picks["force"] / n,
+            "proprio_share": picks["proprio"] / n,
+            "mean_eig_vision":  eig_means["vision"],
+            "mean_eig_force":   eig_means["force"],
+            "mean_eig_proprio": eig_means["proprio"],
+        })
 
     return {
         "seed": seed,
@@ -139,6 +144,12 @@ def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
 _PHASE_PALETTE = {
     "approach": "#3b6ea5", "align": "#3aa37a",
     "contact": "#d28244", "insert": "#a44a8a",
+}
+
+_MODALITY_PALETTE = {
+    "vision":  "#3b6ea5",
+    "force":   "#d28244",
+    "proprio": "#3aa37a",
 }
 
 
@@ -189,30 +200,29 @@ def write_outputs(payload: dict[str, Any], out_dir: Path) -> dict[str, Path]:
         writer.writeheader()
         writer.writerows(summary)
 
-    # Figure 1: sensor attention across time, with phase boundaries.
-    # Use per-step vision picks aggregated across seeds.
-    by_step: dict[int, list[int]] = {}
+    # Figure 1: sensor attention across time, three modalities.
+    modalities = ("vision", "force", "proprio")
+    by_step: dict[int, dict[str, list[int]]] = {}
     for r in rows:
-        by_step.setdefault(r["step"], []).append(1 if r["pick"] == "vision" else 0)
+        for m in modalities:
+            by_step.setdefault(r["step"], {m: [] for m in modalities})
+        for m in modalities:
+            by_step[r["step"]][m].append(1 if r["pick"] == m else 0)
     steps_sorted = sorted(by_step.keys())
-    mean_share = np.array([np.mean(by_step[t]) for t in steps_sorted])
-    std_share = np.array([np.std(by_step[t], ddof=1) if len(by_step[t]) > 1 else 0.0
-                          for t in steps_sorted])
     window = 25
     kernel = np.ones(window) / window
-    smooth_mean = np.convolve(mean_share, kernel, mode="same")
-    smooth_std = np.convolve(std_share, kernel, mode="same")
 
-    fig, ax = plt.subplots(figsize=(5.4, 2.6))
-    ax.plot(steps_sorted, smooth_mean, color="#3b6ea5", lw=1.4)
-    ax.fill_between(steps_sorted, smooth_mean - smooth_std,
-                    smooth_mean + smooth_std,
-                    color="#3b6ea5", alpha=0.15, linewidth=0)
+    fig, ax = plt.subplots(figsize=(5.6, 2.8))
+    for m in modalities:
+        mean_share = np.array(
+            [np.mean(by_step[t][m]) for t in steps_sorted]
+        )
+        smooth = np.convolve(mean_share, kernel, mode="same")
+        ax.plot(steps_sorted, smooth, color=_MODALITY_PALETTE[m], label=m)
     ax.set_ylim(-0.05, 1.1)
     ax.set_xlabel("control tick")
-    ax.set_ylabel("share of vision picks (smoothed)")
+    ax.set_ylabel("share of picks (smoothed)")
 
-    # phase boundaries from cumulative steps
     cum = 0
     label_centers: list[tuple[int, str]] = []
     for s in summary:
@@ -222,7 +232,7 @@ def write_outputs(payload: dict[str, Any], out_dir: Path) -> dict[str, Path]:
     for x, name in label_centers:
         ax.text(x, 1.04, name, ha="center", va="bottom",
                 fontsize=8, color="#444")
-    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(frameon=False, loc="upper right", ncol=3, columnspacing=1.2)
     fig.tight_layout()
     fig_a = out_dir / "figures" / "sensor_attention.pdf"
     fig.savefig(fig_a, bbox_inches="tight")
@@ -250,25 +260,108 @@ def write_outputs(payload: dict[str, Any], out_dir: Path) -> dict[str, Path]:
     fig.savefig(fig_b.with_suffix(".png"), dpi=200, bbox_inches="tight")
     plt.close(fig)
 
-    # Figure 3: vision-share per phase with error bars across seeds.
-    fig, ax = plt.subplots(figsize=(3.6, 2.6))
+    # Figure 3: stacked modality share per phase with seed-std error bars.
+    fig, ax = plt.subplots(figsize=(4.4, 2.8))
     phases = [s["phase"] for s in summary]
-    means = [s["vision_share_mean"] for s in summary]
-    stds = [s.get("vision_share_std", 0.0) for s in summary]
     xs = np.arange(len(phases))
-    ax.bar(xs, means, yerr=stds, color="#3b6ea5",
-           capsize=3, edgecolor="white", error_kw={"lw": 1})
-    ax.axhline(0.5, color="#c0392b", lw=0.8, linestyle="--", label="50/50 split")
+    width = 0.27
+    for i, m in enumerate(modalities):
+        means = [s[f"{m}_share_mean"] for s in summary]
+        stds  = [s.get(f"{m}_share_std", 0.0) for s in summary]
+        ax.bar(xs + (i - 1) * width, means, width=width, yerr=stds,
+               label=m, color=_MODALITY_PALETTE[m],
+               capsize=3, edgecolor="white", error_kw={"lw": 1})
     ax.set_xticks(xs)
-    ax.set_xticklabels(phases, fontsize=8)
+    ax.set_xticklabels(phases)
     ax.set_ylim(0, 1.05)
-    ax.set_ylabel("vision share (mean over seeds)")
-    ax.legend(frameon=False, fontsize=7, loc="upper right")
-    ax.spines[["top", "right"]].set_visible(False)
+    ax.set_ylabel("modality share (mean over seeds)")
+    ax.legend(frameon=False, loc="upper right", ncol=3, columnspacing=1.0)
     fig.tight_layout()
-    fig_c = out_dir / "figures" / "vision_share_per_phase.pdf"
-    fig.savefig(fig_c, bbox_inches="tight")
-    fig.savefig(fig_c.with_suffix(".png"), dpi=200, bbox_inches="tight")
+    fig_c = out_dir / "figures" / "modality_share_per_phase.pdf"
+    fig.savefig(fig_c)
+    fig.savefig(fig_c.with_suffix(".png"), dpi=200)
+    plt.close(fig)
+
+    # Figure 4: posterior precision evolution (1/var) per modality
+    # across time, averaged over seeds. Reveals when each modality
+    # gets sharp.
+    by_step_var: dict[int, dict[str, list[float]]] = {}
+    for r in rows:
+        by_step_var.setdefault(r["step"], {m: [] for m in modalities})
+        for m in modalities:
+            by_step_var[r["step"]][m].append(1.0 / max(r[f"var_{m}_post"], 1e-6))
+    fig, ax = plt.subplots(figsize=(5.6, 2.8))
+    for m in modalities:
+        prec = np.array([
+            float(np.mean(by_step_var[t][m])) for t in steps_sorted
+        ])
+        ax.plot(steps_sorted, prec, color=_MODALITY_PALETTE[m], label=m)
+    cum = 0
+    for s in summary:
+        cum += s["steps"]
+        ax.axvline(cum, color="#888", linestyle=":", linewidth=0.8)
+    ax.set_xlabel("control tick")
+    ax.set_ylabel("posterior precision (1 / var)")
+    ax.legend(frameon=False, loc="upper left", ncol=3, columnspacing=1.2)
+    fig.tight_layout()
+    fig_d = out_dir / "figures" / "posterior_precision.pdf"
+    fig.savefig(fig_d)
+    fig.savefig(fig_d.with_suffix(".png"), dpi=200)
+    plt.close(fig)
+
+    # Composite: 3 panels.
+    fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.2))
+
+    # Panel A: per-modality share over time
+    ax = axes[0]
+    for m in modalities:
+        mean_share = np.array([np.mean(by_step[t][m]) for t in steps_sorted])
+        smooth = np.convolve(mean_share, kernel, mode="same")
+        ax.plot(steps_sorted, smooth, color=_MODALITY_PALETTE[m], label=m)
+    ax.set_ylim(-0.05, 1.1)
+    ax.set_xlabel("control tick")
+    ax.set_ylabel("share of picks (smoothed)")
+    ax.set_title("a) modality share over time")
+    cum = 0
+    for s in summary:
+        cum += s["steps"]
+        ax.axvline(cum, color="#888", linestyle=":", linewidth=0.8)
+    ax.legend(frameon=False, loc="upper right", ncol=3, columnspacing=1.0)
+
+    # Panel B: per-phase modality share with seed-std bars
+    ax = axes[1]
+    phases_list = [s["phase"] for s in summary]
+    xs = np.arange(len(phases_list))
+    width = 0.27
+    for i, m in enumerate(modalities):
+        ms = [s[f"{m}_share_mean"] for s in summary]
+        ss = [s.get(f"{m}_share_std", 0.0) for s in summary]
+        ax.bar(xs + (i - 1) * width, ms, width=width, yerr=ss,
+               label=m, color=_MODALITY_PALETTE[m],
+               capsize=3, edgecolor="white", error_kw={"lw": 1})
+    ax.set_xticks(xs)
+    ax.set_xticklabels(phases_list)
+    ax.set_ylim(0, 1.05)
+    ax.set_ylabel("modality share")
+    ax.set_title("b) share per phase")
+
+    # Panel C: posterior precision over time
+    ax = axes[2]
+    for m in modalities:
+        prec = np.array([float(np.mean(by_step_var[t][m])) for t in steps_sorted])
+        ax.plot(steps_sorted, prec, color=_MODALITY_PALETTE[m], label=m)
+    cum = 0
+    for s in summary:
+        cum += s["steps"]
+        ax.axvline(cum, color="#888", linestyle=":", linewidth=0.8)
+    ax.set_xlabel("control tick")
+    ax.set_ylabel("posterior precision")
+    ax.set_title("c) posterior precision")
+
+    fig.tight_layout()
+    composite_fig = out_dir / "figures" / "composite.pdf"
+    fig.savefig(composite_fig)
+    fig.savefig(composite_fig.with_suffix(".png"), dpi=200)
     plt.close(fig)
 
     return {
@@ -277,6 +370,8 @@ def write_outputs(payload: dict[str, Any], out_dir: Path) -> dict[str, Path]:
         "fig_a": fig_a,
         "fig_b": fig_b,
         "fig_c": fig_c,
+        "fig_d": fig_d,
+        "fig_composite": composite_fig,
     }
 
 
@@ -289,8 +384,7 @@ def _aggregate(payloads: list[dict[str, Any]]) -> dict[str, Any]:
         for r in p["rows"]:
             rows.append({"seed": p["seed"], **r})
 
-    # Per-phase aggregate stats over seeds: mean and stderr of
-    # vision share and mean EIG.
+    # Per-phase aggregate stats over seeds.
     by_phase: dict[str, list[dict[str, Any]]] = {}
     for p in payloads:
         for s in p["summary"]:
@@ -298,20 +392,27 @@ def _aggregate(payloads: list[dict[str, Any]]) -> dict[str, Any]:
     summary: list[dict[str, Any]] = []
     for phase, items in by_phase.items():
         n = len(items)
-        vs = np.array([it["vision_share"] for it in items])
-        eig_v = np.array([it["mean_eig_vision"] for it in items])
-        eig_f = np.array([it["mean_eig_force"] for it in items])
-        summary.append({
+        shares = {
+            m: np.array([it[f"{m}_share"] for it in items])
+            for m in ("vision", "force", "proprio")
+        }
+        eigs = {
+            m: np.array([it[f"mean_eig_{m}"] for it in items])
+            for m in ("vision", "force", "proprio")
+        }
+        row = {
             "phase": phase,
             "steps": items[0]["steps"],
             "true_sigma_vision": items[0]["true_sigma_vision"],
             "true_sigma_force": items[0]["true_sigma_force"],
-            "vision_share_mean": float(vs.mean()),
-            "vision_share_std": float(vs.std(ddof=1) if n > 1 else 0.0),
-            "mean_eig_vision": float(eig_v.mean()),
-            "mean_eig_force": float(eig_f.mean()),
+            "true_sigma_proprio": items[0]["true_sigma_proprio"],
             "n_seeds": n,
-        })
+        }
+        for m in ("vision", "force", "proprio"):
+            row[f"{m}_share_mean"] = float(shares[m].mean())
+            row[f"{m}_share_std"]  = float(shares[m].std(ddof=1) if n > 1 else 0.0)
+            row[f"mean_eig_{m}"]   = float(eigs[m].mean())
+        summary.append(row)
     return {
         "seeds": [p["seed"] for p in payloads],
         "horizon": payloads[0]["horizon"],
@@ -322,7 +423,7 @@ def _aggregate(payloads: list[dict[str, Any]]) -> dict[str, Any]:
 
 @app.local_entrypoint()
 def main(
-    seeds: str = "0,1,2,3,4",
+    seeds: str = "0,1,2,3,4,5,6,7",
     horizon: int = 600,
     out_dir: str = "results",
 ) -> None:
@@ -333,13 +434,12 @@ def main(
     paths = write_outputs(agg, Path(out_dir))
     print(
         f"wrote traces.csv ({len(agg['rows'])} rows), per_phase.csv "
-        f"({len(agg['summary'])} phases), "
-        f"{paths['fig_a'].relative_to(Path(out_dir))}, "
-        f"{paths['fig_b'].relative_to(Path(out_dir))}"
+        f"({len(agg['summary'])} phases), 4 figures"
     )
-    shares = ", ".join(
-        f"{s['phase']}={s['vision_share_mean']:.2f}"
-        f"±{s.get('vision_share_std', 0):.2f}"
-        for s in agg["summary"]
-    )
-    print(f"vision-share across seeds {seed_list}: {shares}")
+    for m in ("vision", "force", "proprio"):
+        shares = ", ".join(
+            f"{s['phase']}={s[f'{m}_share_mean']:.2f}"
+            f"±{s.get(f'{m}_share_std', 0):.2f}"
+            for s in agg["summary"]
+        )
+        print(f"{m:>7} share across {len(seed_list)} seeds: {shares}")
