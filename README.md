@@ -76,21 +76,20 @@ modal run python/modal_results.py::main --seeds 0,1,2,3,4 --horizon 600
 
 The synthetic task has four canonical peg-in-hole phases (approach,
 align, contact, insert) with phase-dependent per-modality noise.
-Across 5 seeds, the controller's vision share drops monotonically as
-the task transitions from vision-dominated to force-dominated:
+Three modalities: vision, force, proprioception. Across 8 seeds:
 
-| phase | vision share (mean +/- std, 5 seeds) |
-|-------|--------------------------------------|
-| approach |  0.91 +/- 0.03 |
-| align    |  0.83 +/- 0.04 |
-| contact  |  0.55 +/- 0.05 |
-| insert   |  0.20 +/- 0.04 |
+| phase    | vision        | force         | proprio       |
+|----------|--------------:|--------------:|--------------:|
+| approach | 0.89 +/- 0.05 | 0.04 +/- 0.02 | 0.07 +/- 0.04 |
+| align    | 0.75 +/- 0.10 | 0.03 +/- 0.02 | 0.22 +/- 0.10 |
+| contact  | 0.57 +/- 0.09 | 0.23 +/- 0.09 | 0.20 +/- 0.08 |
+| insert   | 0.20 +/- 0.05 | 0.67 +/- 0.08 | 0.12 +/- 0.06 |
 
-Figures and CSV traces land in `results/`. Headline plots:
-`results/figures/sensor_attention.pdf` (vision share over time),
-`results/figures/eig_vs_residual.pdf` (per-modality EIG by phase),
-`results/figures/vision_share_per_phase.pdf` (the table above as a
-bar chart with seed-std error bars).
+Without any phase supervision the controller recovers the canonical
+sensor-attention schedule: vision dominates approach, proprioception
+peaks in align (joint encoders matter most for fine positioning),
+force takes over on contact and insert. Full breakdown in
+[RESULTS.md](RESULTS.md).
 
 ## Theory backing
 
