@@ -86,8 +86,14 @@ def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
         pick_idx = int(rng.choice(len(modalities), p=probs))
         picked = modalities[pick_idx]
 
-        # update posterior precision of the picked modality
-        var[picked] = 1.0 / (1.0 / var[picked] + 1.0)
+        # update posterior precision of the picked modality. The
+        # update is residual-weighted: a large residual moves the
+        # posterior more than a small one, which matches a Gaussian
+        # likelihood with observation noise sigma_obs.
+        sigma_obs2 = 1.0
+        prec_pre = 1.0 / max(var[picked], 1e-9)
+        prec_post = prec_pre + (r[picked] ** 2) / sigma_obs2
+        var[picked] = 1.0 / prec_post
 
         rows.append({
             "step": t,
@@ -133,11 +139,86 @@ def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
             "mean_eig_proprio": eig_means["proprio"],
         })
 
+    # Baselines for regret comparison:
+    #   - random      : uniform-random modality each tick
+    #   - vision_only : always pick vision
+    #   - force_only  : always pick force
+    #   - oracle      : pick the modality with the highest true sigma
+    #     for the current phase (BALD agent does not see phase label).
+    #
+    # Score function = sum of EIG over the trajectory (each tick the
+    # information actually drawn from the picked sensor).
+    baselines: dict[str, float] = {}
+    bald_eig = 0.0
+    for r in rows:
+        bald_eig += float(r[f"eig_{r['pick']}"])
+
+    rng_b = np.random.default_rng(seed + 9999)
+    baselines["random"] = float(sum(
+        r[f"eig_{rng_b.choice(modalities)}"] for r in rows
+    ))
+    baselines["vision_only"] = float(sum(r["eig_vision"] for r in rows))
+    baselines["force_only"]  = float(sum(r["eig_force"]  for r in rows))
+    baselines["proprio_only"] = float(sum(r["eig_proprio"] for r in rows))
+
+    # Phase-aware baseline: pick the modality with the largest true
+    # sigma in the current phase (still does not see per-tick
+    # residuals). This is a strong handcrafted policy.
+    phase_aware_eig = 0.0
+    for name, lo, hi, sv, sf, sp in phases:
+        true_sigmas = {"vision": sv, "force": sf, "proprio": sp}
+        best_mod = max(true_sigmas, key=lambda m: true_sigmas[m])
+        chunk = rows[lo:hi]
+        for r in chunk:
+            phase_aware_eig += float(r[f"eig_{best_mod}"])
+
+    # Per-tick oracle: omniscient picker that always selects the
+    # modality with the largest realized EIG at this tick.
+    tick_oracle_eig = float(sum(
+        max(r["eig_vision"], r["eig_force"], r["eig_proprio"])
+        for r in rows
+    ))
+
+    regret_vs_oracle = {
+        "bald":         tick_oracle_eig - bald_eig,
+        "phase_aware":  tick_oracle_eig - phase_aware_eig,
+        "random":       tick_oracle_eig - baselines["random"],
+        "vision_only":  tick_oracle_eig - baselines["vision_only"],
+        "force_only":   tick_oracle_eig - baselines["force_only"],
+        "proprio_only": tick_oracle_eig - baselines["proprio_only"],
+    }
+
+    # Per-phase oracle-match rate: fraction of ticks where the BALD
+    # agent picked the modality with the largest ground-truth sigma
+    # in that phase. The agent does not see phase labels; this is a
+    # quality-of-inference diagnostic.
+    oracle_match: list[dict[str, Any]] = []
+    for name, lo, hi, sv, sf, sp in phases:
+        true_sigmas = {"vision": sv, "force": sf, "proprio": sp}
+        best_mod = max(true_sigmas, key=lambda m: true_sigmas[m])
+        chunk = rows[lo:hi]
+        if not chunk:
+            continue
+        match = sum(1 for r in chunk if r["pick"] == best_mod) / len(chunk)
+        oracle_match.append({
+            "phase": name,
+            "best_modality": best_mod,
+            "best_sigma": true_sigmas[best_mod],
+            "match_rate": float(match),
+            "n_ticks": len(chunk),
+        })
+
     return {
         "seed": seed,
         "horizon": horizon,
         "rows": rows,
         "summary": summary,
+        "bald_eig":         bald_eig,
+        "phase_aware_eig":  phase_aware_eig,
+        "tick_oracle_eig":  tick_oracle_eig,
+        "baseline_eig":     baselines,
+        "regret_vs_oracle": regret_vs_oracle,
+        "oracle_match":     oracle_match,
     }
 
 
@@ -199,6 +280,22 @@ def write_outputs(payload: dict[str, Any], out_dir: Path) -> dict[str, Path]:
         writer = csv.DictWriter(f, fieldnames=list(summary[0].keys()))
         writer.writeheader()
         writer.writerows(summary)
+
+    regret_table = payload.get("regret_table") or []
+    regret_csv = out_dir / "regret_vs_oracle.csv"
+    if regret_table:
+        with regret_csv.open("w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(regret_table[0].keys()))
+            writer.writeheader()
+            writer.writerows(regret_table)
+
+    om = payload.get("oracle_match") or []
+    om_csv = out_dir / "oracle_match.csv"
+    if om:
+        with om_csv.open("w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(om[0].keys()))
+            writer.writeheader()
+            writer.writerows(om)
 
     # Figure 1: sensor attention across time, three modalities.
     modalities = ("vision", "force", "proprio")
@@ -280,6 +377,34 @@ def write_outputs(payload: dict[str, Any], out_dir: Path) -> dict[str, Path]:
     fig_c = out_dir / "figures" / "modality_share_per_phase.pdf"
     fig.savefig(fig_c)
     fig.savefig(fig_c.with_suffix(".png"), dpi=200)
+    plt.close(fig)
+
+    # Figure: per-modality EIG distribution. Box plot per modality
+    # across phases shows when each sensor's expected information
+    # gain peaks. Vision is highest in approach, force in insert.
+    fig, ax = plt.subplots(figsize=(4.4, 3.0))
+    phase_names = [s["phase"] for s in summary]
+    width = 0.27
+    xs = np.arange(len(phase_names))
+    for i, m in enumerate(modalities):
+        means = []
+        stds  = []
+        for s in summary:
+            phase_rows = [r for r in rows if r["phase"] == s["phase"]]
+            vals = [float(r[f"eig_{m}"]) for r in phase_rows]
+            means.append(float(np.mean(vals)))
+            stds.append(float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0)
+        ax.bar(xs + (i - 1) * width, means, width=width, yerr=stds,
+               label=m, color=_MODALITY_PALETTE[m],
+               capsize=3, edgecolor="white", error_kw={"lw": 0.8})
+    ax.set_xticks(xs)
+    ax.set_xticklabels(phase_names)
+    ax.set_ylabel("mean EIG (over ticks in phase)")
+    ax.legend(frameon=False, loc="upper left", ncol=3, columnspacing=1.0)
+    fig.tight_layout()
+    calib_fig = out_dir / "figures" / "eig_per_phase.pdf"
+    fig.savefig(calib_fig)
+    fig.savefig(calib_fig.with_suffix(".png"), dpi=200)
     plt.close(fig)
 
     # Figure 4: posterior precision evolution (1/var) per modality
@@ -372,6 +497,7 @@ def write_outputs(payload: dict[str, Any], out_dir: Path) -> dict[str, Path]:
         "fig_c": fig_c,
         "fig_d": fig_d,
         "fig_composite": composite_fig,
+        "fig_eig_per_phase": calib_fig,
     }
 
 
@@ -413,11 +539,44 @@ def _aggregate(payloads: list[dict[str, Any]]) -> dict[str, Any]:
             row[f"{m}_share_std"]  = float(shares[m].std(ddof=1) if n > 1 else 0.0)
             row[f"mean_eig_{m}"]   = float(eigs[m].mean())
         summary.append(row)
+    # Aggregate oracle-match rate per phase.
+    match_by_phase: dict[str, list[float]] = {}
+    for p in payloads:
+        for r in p.get("oracle_match", []):
+            match_by_phase.setdefault(r["phase"], []).append(r["match_rate"])
+    oracle_match = []
+    for phase, vals in match_by_phase.items():
+        arr = np.array(vals, dtype=float)
+        oracle_match.append({
+            "phase": phase,
+            "match_rate_mean": float(arr.mean()),
+            "match_rate_std": float(arr.std(ddof=1) if arr.size > 1 else 0.0),
+            "n_seeds": int(arr.size),
+        })
+
+    # Aggregate regret vs oracle across seeds.
+    regret_keys = list(payloads[0].get("regret_vs_oracle", {}).keys())
+    by_method: dict[str, list[float]] = {k: [] for k in regret_keys}
+    for p in payloads:
+        for k, v in p.get("regret_vs_oracle", {}).items():
+            by_method[k].append(float(v))
+    regret_table = []
+    for k, vals in by_method.items():
+        arr = np.array(vals, dtype=float)
+        regret_table.append({
+            "method": k,
+            "regret_mean": float(arr.mean()),
+            "regret_std": float(arr.std(ddof=1) if arr.size > 1 else 0.0),
+            "n_seeds": int(arr.size),
+        })
+
     return {
         "seeds": [p["seed"] for p in payloads],
         "horizon": payloads[0]["horizon"],
         "rows": rows,
         "summary": summary,
+        "regret_table": regret_table,
+        "oracle_match": oracle_match,
     }
 
 
