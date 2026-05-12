@@ -140,14 +140,15 @@ def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
         })
 
     # Baselines for regret comparison:
-    #   - random      : uniform-random modality each tick
-    #   - vision_only : always pick vision
-    #   - force_only  : always pick force
-    #   - oracle      : pick the modality with the highest true sigma
-    #     for the current phase (BALD agent does not see phase label).
-    #
-    # Score function = sum of EIG over the trajectory (each tick the
-    # information actually drawn from the picked sensor).
+    #   - random       : uniform-random modality each tick
+    #   - vision_only  : always pick vision
+    #   - force_only   : always pick force
+    #   - proprio_only : always pick proprio
+    #   - ucb          : UCB1 bandit treating each modality as an arm
+    #     whose reward is the realized residual squared. Closely
+    #     related to BALD but uses a confidence bonus instead of
+    #     expected info gain.
+    #   - phase_aware  : per-phase oracle (see below)
     baselines: dict[str, float] = {}
     bald_eig = 0.0
     for r in rows:
@@ -160,6 +161,28 @@ def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
     baselines["vision_only"] = float(sum(r["eig_vision"] for r in rows))
     baselines["force_only"]  = float(sum(r["eig_force"]  for r in rows))
     baselines["proprio_only"] = float(sum(r["eig_proprio"] for r in rows))
+
+    # UCB1 over modalities. Reward = realized residual^2 (proxy for
+    # information drawn). UCB picks argmax( mean_reward + sqrt(2 ln t / n_m) ).
+    n_picks = {m: 0 for m in modalities}
+    sum_reward = {m: 0.0 for m in modalities}
+    ucb_eig = 0.0
+    for t_idx, r in enumerate(rows, start=1):
+        if min(n_picks.values()) == 0:
+            picked_ucb = next(m for m in modalities if n_picks[m] == 0)
+        else:
+            picked_ucb = max(
+                modalities,
+                key=lambda m: (
+                    sum_reward[m] / n_picks[m]
+                    + float(np.sqrt(2.0 * np.log(t_idx) / n_picks[m]))
+                ),
+            )
+        reward = float(r[f"residual_{picked_ucb}"]) ** 2
+        n_picks[picked_ucb] += 1
+        sum_reward[picked_ucb] += reward
+        ucb_eig += float(r[f"eig_{picked_ucb}"])
+    baselines["ucb"] = ucb_eig
 
     # Phase-aware baseline: pick the modality with the largest true
     # sigma in the current phase (still does not see per-tick
@@ -181,11 +204,12 @@ def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
 
     regret_vs_oracle = {
         "bald":         tick_oracle_eig - bald_eig,
+        "ucb":          tick_oracle_eig - baselines["ucb"],
         "phase_aware":  tick_oracle_eig - phase_aware_eig,
-        "random":       tick_oracle_eig - baselines["random"],
         "vision_only":  tick_oracle_eig - baselines["vision_only"],
-        "force_only":   tick_oracle_eig - baselines["force_only"],
+        "random":       tick_oracle_eig - baselines["random"],
         "proprio_only": tick_oracle_eig - baselines["proprio_only"],
+        "force_only":   tick_oracle_eig - baselines["force_only"],
     }
 
     # Per-phase oracle-match rate: fraction of ticks where the BALD
