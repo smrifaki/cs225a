@@ -44,11 +44,18 @@ baselines.
 | policy        | regret vs oracle (mean +/- std, 8 seeds) |
 |---------------|-----------------------------------------:|
 | BALD          |    6.3 +/-   1.7  |
+| UCB1          |  175.8 +/-  40.0  |
 | vision-only   |  302.6 +/-  31.1  |
 | phase-aware   |  425.3 +/-  65.7  |
 | random        |  664.0 +/-  42.4  |
 | proprio-only  |  849.5 +/- 144.5  |
 | force-only    |  867.6 +/-  84.2  |
+
+UCB1 (residual squared as reward) sits between BALD and phase-
+aware: better than any hand-coded fixed policy, worse than BALD by
+~28x. The gap measures how much the *expected* information drop
+(BALD) buys over a confidence-bonus exploration heuristic on the
+same arm structure.
 
 BALD with no phase supervision lands within 6 of the omniscient
 oracle; a hand-coded phase-aware policy (picks the highest-sigma
