@@ -27,7 +27,7 @@ image = (
 
 
 @app.function(image=image, timeout=600)
-def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
+def simulate(seed: int = 0, horizon: int = 600, beta: float = 6.0) -> dict[str, Any]:
     import numpy as np
 
     rng = np.random.default_rng(seed)
@@ -54,8 +54,8 @@ def simulate(seed: int = 0, horizon: int = 600) -> dict[str, Any]:
 
     # BALD-style expected information gain: pick the modality with
     # the larger expected entropy drop, ~ residual^2 / posterior_var,
-    # softmaxed to keep some exploration.
-    beta = 6.0
+    # softmaxed to keep some exploration. beta is the inverse
+    # temperature; small beta -> uniform, large beta -> argmax.
     modalities = ["vision", "force", "proprio"]
 
     rows: list[dict[str, Any]] = []
@@ -604,17 +604,84 @@ def _aggregate(payloads: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _beta_sweep_outputs(
+    out_dir: Path,
+    seed_list: list[int],
+    horizon: int,
+    betas: list[float],
+) -> Path:
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    _apply_style(plt)
+
+    # Inverse-temperature sweep. For each beta we average BALD's
+    # cumulative EIG (= sum_t eig_picked) across seeds and report
+    # vs the per-tick oracle ceiling.
+    rows = []
+    for b in betas:
+        args = [(s, int(horizon), float(b)) for s in seed_list]
+        payloads = list(simulate.starmap(args))
+        per_seed = []
+        per_seed_oracle = []
+        for p in payloads:
+            per_seed.append(float(p["bald_eig"]))
+            per_seed_oracle.append(float(p["tick_oracle_eig"]))
+        rows.append({
+            "beta": float(b),
+            "bald_eig_mean":   float(np.mean(per_seed)),
+            "bald_eig_std":    float(np.std(per_seed, ddof=1)) if len(per_seed) > 1 else 0.0,
+            "oracle_eig_mean": float(np.mean(per_seed_oracle)),
+            "regret_mean":     float(np.mean(np.array(per_seed_oracle) - np.array(per_seed))),
+            "regret_std":      float(np.std(np.array(per_seed_oracle) - np.array(per_seed), ddof=1)) if len(per_seed) > 1 else 0.0,
+            "n_seeds":         len(per_seed),
+        })
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "figures").mkdir(parents=True, exist_ok=True)
+
+    beta_csv = out_dir / "beta_sweep.csv"
+    with beta_csv.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    fig, ax = plt.subplots(figsize=(4.4, 3.0))
+    bs = [r["beta"] for r in rows]
+    mean_regret = [r["regret_mean"] for r in rows]
+    std_regret  = [r["regret_std"]  for r in rows]
+    ax.errorbar(bs, mean_regret, yerr=std_regret,
+                color="#3b6ea5", marker="o")
+    ax.set_xscale("log")
+    ax.set_xlabel("inverse temperature beta")
+    ax.set_ylabel("regret vs per-tick oracle (mean +/- std)")
+    fig.tight_layout()
+    fig_path = out_dir / "figures" / "beta_sweep.pdf"
+    fig.savefig(fig_path)
+    fig.savefig(fig_path.with_suffix(".png"), dpi=200)
+    plt.close(fig)
+    return fig_path
+
+
 @app.local_entrypoint()
 def main(
     seeds: str = "0,1,2,3,4,5,6,7",
     horizon: int = 600,
     out_dir: str = "results",
+    betas: str = "0.5,1,2,4,6,8,12,20",
 ) -> None:
     seed_list = [int(s) for s in seeds.split(",") if s.strip()]
-    args = [(s, int(horizon)) for s in seed_list]
+    args = [(s, int(horizon), 6.0) for s in seed_list]
     payloads = list(simulate.starmap(args))
     agg = _aggregate(payloads)
     paths = write_outputs(agg, Path(out_dir))
+
+    # Run the beta sweep at the same horizon and seed set.
+    beta_list = [float(b) for b in betas.split(",") if b.strip()]
+    _beta_sweep_outputs(Path(out_dir), seed_list, int(horizon), beta_list)
+    print(f"beta sweep: {len(beta_list)} betas, results/beta_sweep.csv")
     print(
         f"wrote traces.csv ({len(agg['rows'])} rows), per_phase.csv "
         f"({len(agg['summary'])} phases), 4 figures"
