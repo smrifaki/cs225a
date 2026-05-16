@@ -57,6 +57,28 @@ aware: better than any hand-coded fixed policy, worse than BALD by
 (BALD) buys over a confidence-bonus exploration heuristic on the
 same arm structure.
 
+## Inverse-temperature sweep
+
+The default agent runs a softmax over EIG with beta=6. Sweep beta
+in {0.5, 1, 2, 4, 6, 8, 12, 20} with the same 8 seeds:
+
+| beta | regret vs oracle (mean +/- std) |
+|-----:|---------------------------------:|
+|  0.5 | 362.4 +/- 23.0 |
+|  1.0 | 200.0 +/- 21.3 |
+|  2.0 |  66.8 +/-  4.3 |
+|  4.0 |  14.4 +/-  1.6 |
+|  6.0 |   6.3 +/-  1.7 |
+|  8.0 |   4.1 +/-  0.9 |
+| 12.0 |   2.0 +/-  0.6 |
+| 20.0 |   0.8 +/-  0.3 |
+
+At beta=20 the policy is effectively argmax and regret drops to
+0.8 per trajectory. The default beta=6 keeps a small exploration
+margin and pays ~5 regret for it. Source:
+[results/beta_sweep.csv](results/beta_sweep.csv),
+[results/figures/beta_sweep.pdf](results/figures/beta_sweep.pdf).
+
 BALD with no phase supervision lands within 6 of the omniscient
 oracle; a hand-coded phase-aware policy (picks the highest-sigma
 modality given the current phase label) sits 70x further away.

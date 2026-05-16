@@ -2,9 +2,22 @@
 
 CS 225A final project. Operational-space control on a 7-DOF Kuka arm
 augmented with a prediction-error-driven sensor-attention layer that
-decides at each control tick whether to attend to the eye-in-hand
-camera or to the wrist force-torque sensor when refining the
-end-effector pose.
+decides at each control tick which of three sensors (eye-in-hand
+camera, wrist force-torque, joint encoders) to attend to when
+refining the end-effector pose.
+
+**Decision-layer answer (Modal, 8 seeds, 600-step horizon, 3-modality):**
+
+| policy        | regret vs per-tick oracle |
+|---------------|--------------------------:|
+| BALD          |    6.3 +/-   1.7 |
+| UCB1          |  175.8 +/-  40.0 |
+| vision-only   |  302.6 +/-  31.1 |
+| phase-aware   |  425.3 +/-  65.7 |
+| random        |  664.0 +/-  42.4 |
+| force-only    |  867.6 +/-  84.2 |
+
+Full breakdown in [RESULTS.md](RESULTS.md).
 
 The core claim: a robot doing a contact-rich task (peg-in-hole, soft
 contact, slip-prone grasp) does not need every sensor every tick; it
