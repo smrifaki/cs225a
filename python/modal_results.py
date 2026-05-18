@@ -38,12 +38,21 @@ def simulate(seed: int = 0, horizon: int = 600, beta: float = 6.0) -> dict[str, 
     # per-modality residual scale is phase-dependent; the controller
     # does not see the phase label.
     #
-    # phase tuple = (name, start, end, sigma_vision, sigma_force, sigma_proprio)
+    # Phase boundaries are proportional to horizon so the schedule
+    # scales linearly with task length.
+    splits = (0.25, 0.467, 0.70, 1.0)
+    sigmas = [
+        ("approach", 1.4, 0.4, 0.5),
+        ("align",    1.1, 0.7, 1.2),
+        ("contact",  0.7, 1.3, 0.9),
+        ("insert",   0.4, 1.7, 0.6),
+    ]
+    bounds = [int(round(s * horizon)) for s in splits]
+    starts = [0] + bounds[:-1]
     phases = [
-        ("approach", 0,   150, 1.4, 0.4, 0.5),
-        ("align",    150, 280, 1.1, 0.7, 1.2),
-        ("contact",  280, 420, 0.7, 1.3, 0.9),
-        ("insert",   420, horizon, 0.4, 1.7, 0.6),
+        (sigmas[i][0], starts[i], bounds[i],
+         sigmas[i][1], sigmas[i][2], sigmas[i][3])
+        for i in range(4)
     ]
 
     # Forward dynamics: 1D feature per modality. Each tick the
@@ -604,6 +613,65 @@ def _aggregate(payloads: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _horizon_sweep_outputs(
+    out_dir: Path,
+    seed_list: list[int],
+    horizons: list[int],
+) -> Path:
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    _apply_style(plt)
+
+    rows = []
+    for h in horizons:
+        args = [(s, int(h), 6.0) for s in seed_list]
+        payloads = list(simulate.starmap(args))
+        bald = [float(p["bald_eig"]) for p in payloads]
+        oracle = [float(p["tick_oracle_eig"]) for p in payloads]
+        regret = [oracle[i] - bald[i] for i in range(len(payloads))]
+        rows.append({
+            "horizon": int(h),
+            "bald_eig_mean":   float(np.mean(bald)),
+            "oracle_eig_mean": float(np.mean(oracle)),
+            "regret_mean":     float(np.mean(regret)),
+            "regret_std":      float(np.std(regret, ddof=1)) if len(regret) > 1 else 0.0,
+            "regret_per_tick": float(np.mean(regret) / h),
+            "n_seeds":         len(payloads),
+        })
+
+    horizon_csv = out_dir / "horizon_sweep.csv"
+    with horizon_csv.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 3.0), sharex=True)
+    hs = [r["horizon"] for r in rows]
+
+    ax = axes[0]
+    ax.errorbar(hs, [r["regret_mean"] for r in rows],
+                yerr=[r["regret_std"] for r in rows],
+                color="#3b6ea5", marker="o")
+    ax.set_xlabel("trajectory horizon (ticks)")
+    ax.set_ylabel("total regret vs oracle")
+
+    ax = axes[1]
+    ax.plot(hs, [r["regret_per_tick"] for r in rows],
+            color="#3b6ea5", marker="o")
+    ax.set_xlabel("trajectory horizon (ticks)")
+    ax.set_ylabel("per-tick regret")
+
+    fig.tight_layout()
+    fig_path = out_dir / "figures" / "horizon_sweep.pdf"
+    fig.savefig(fig_path)
+    fig.savefig(fig_path.with_suffix(".png"), dpi=200)
+    plt.close(fig)
+    return fig_path
+
+
 def _beta_sweep_outputs(
     out_dir: Path,
     seed_list: list[int],
@@ -682,6 +750,12 @@ def main(
     beta_list = [float(b) for b in betas.split(",") if b.strip()]
     _beta_sweep_outputs(Path(out_dir), seed_list, int(horizon), beta_list)
     print(f"beta sweep: {len(beta_list)} betas, results/beta_sweep.csv")
+
+    # Horizon sweep at default beta with proportional phase scaling.
+    _horizon_sweep_outputs(
+        Path(out_dir), seed_list, [200, 400, 600, 900, 1200],
+    )
+    print("horizon sweep: 5 horizons, results/horizon_sweep.csv")
     print(
         f"wrote traces.csv ({len(agg['rows'])} rows), per_phase.csv "
         f"({len(agg['summary'])} phases), 4 figures"
