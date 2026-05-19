@@ -27,7 +27,12 @@ image = (
 
 
 @app.function(image=image, timeout=600)
-def simulate(seed: int = 0, horizon: int = 600, beta: float = 6.0) -> dict[str, Any]:
+def simulate(
+    seed: int = 0,
+    horizon: int = 600,
+    beta: float = 6.0,
+    dropout: float = 0.0,
+) -> dict[str, Any]:
     import numpy as np
 
     rng = np.random.default_rng(seed)
@@ -75,12 +80,18 @@ def simulate(seed: int = 0, horizon: int = 600, beta: float = 6.0) -> dict[str, 
             phase_idx += 1
         name, _, _, sv, sf, sp = phases[phase_idx]
 
-        # ground-truth residuals per modality
+        # ground-truth residuals per modality, with optional sensor
+        # dropout: with prob `dropout` each modality reads a zero
+        # residual at this tick (sensor missed, signal lost).
         r = {
             "vision":  rng.normal(0.0, sv),
             "force":   rng.normal(0.0, sf),
             "proprio": rng.normal(0.0, sp),
         }
+        if dropout > 0.0:
+            for m in modalities:
+                if rng.uniform() < dropout:
+                    r[m] = 0.0
 
         # expected information gain per modality, ignoring constants
         eig = {
@@ -613,6 +624,57 @@ def _aggregate(payloads: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _dropout_sweep_outputs(
+    out_dir: Path,
+    seed_list: list[int],
+    horizon: int,
+    dropouts: list[float],
+) -> Path:
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    _apply_style(plt)
+
+    rows = []
+    for d in dropouts:
+        args = [(s, int(horizon), 6.0, float(d)) for s in seed_list]
+        payloads = list(simulate.starmap(args))
+        bald = [float(p["bald_eig"]) for p in payloads]
+        oracle = [float(p["tick_oracle_eig"]) for p in payloads]
+        regret = [oracle[i] - bald[i] for i in range(len(payloads))]
+        rows.append({
+            "dropout": float(d),
+            "bald_eig_mean":   float(np.mean(bald)),
+            "oracle_eig_mean": float(np.mean(oracle)),
+            "regret_mean":     float(np.mean(regret)),
+            "regret_std":      float(np.std(regret, ddof=1)) if len(regret) > 1 else 0.0,
+            "regret_per_tick": float(np.mean(regret) / horizon),
+            "n_seeds":         len(payloads),
+        })
+
+    dropout_csv = out_dir / "dropout_sweep.csv"
+    with dropout_csv.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    fig, ax = plt.subplots(figsize=(4.4, 3.0))
+    ds = [r["dropout"] for r in rows]
+    ax.errorbar(ds, [r["regret_mean"] for r in rows],
+                yerr=[r["regret_std"] for r in rows],
+                color="#3b6ea5", marker="o")
+    ax.set_xlabel("per-modality dropout rate")
+    ax.set_ylabel("regret vs oracle (8 seeds, horizon = same)")
+    fig.tight_layout()
+    fig_path = out_dir / "figures" / "dropout_sweep.pdf"
+    fig.savefig(fig_path)
+    fig.savefig(fig_path.with_suffix(".png"), dpi=200)
+    plt.close(fig)
+    return fig_path
+
+
 def _horizon_sweep_outputs(
     out_dir: Path,
     seed_list: list[int],
@@ -756,6 +818,13 @@ def main(
         Path(out_dir), seed_list, [200, 400, 600, 900, 1200],
     )
     print("horizon sweep: 5 horizons, results/horizon_sweep.csv")
+
+    # Dropout sweep at default beta and horizon.
+    _dropout_sweep_outputs(
+        Path(out_dir), seed_list, int(horizon),
+        [0.0, 0.05, 0.1, 0.2, 0.4],
+    )
+    print("dropout sweep: 5 rates, results/dropout_sweep.csv")
     print(
         f"wrote traces.csv ({len(agg['rows'])} rows), per_phase.csv "
         f"({len(agg['summary'])} phases), 4 figures"

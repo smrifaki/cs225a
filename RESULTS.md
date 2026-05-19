@@ -57,6 +57,26 @@ aware: better than any hand-coded fixed policy, worse than BALD by
 (BALD) buys over a confidence-bonus exploration heuristic on the
 same arm structure.
 
+## Horizon sweep
+
+Phase boundaries scale proportionally with the trajectory horizon
+(approach 0-25%, align 25-47%, contact 47-70%, insert 70-100%). At
+each horizon the same 8 seeds run with the default beta=6 controller.
+
+| horizon | total regret | per-tick regret |
+|--------:|-------------:|----------------:|
+|   200 |   2.6 +/- 0.8 | 0.013 |
+|   400 |   6.1 +/- 1.8 | 0.015 |
+|   600 |   6.3 +/- 1.7 | 0.011 |
+|   900 |  10.1 +/- 1.7 | 0.011 |
+|  1200 |  12.7 +/- 2.6 | 0.011 |
+
+Per-tick regret is roughly constant across horizons (~0.011-0.015),
+so total regret grows linearly with task length. The controller's
+adaptation does not drift over long horizons. Source:
+[results/horizon_sweep.csv](results/horizon_sweep.csv),
+[results/figures/horizon_sweep.pdf](results/figures/horizon_sweep.pdf).
+
 ## Inverse-temperature sweep
 
 The default agent runs a softmax over EIG with beta=6. Sweep beta
