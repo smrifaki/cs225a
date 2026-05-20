@@ -57,6 +57,26 @@ aware: better than any hand-coded fixed policy, worse than BALD by
 (BALD) buys over a confidence-bonus exploration heuristic on the
 same arm structure.
 
+## Sensor-dropout robustness
+
+At each tick, each modality has independent probability `p` of
+returning a zero residual (signal lost / sensor missed). The BALD
+agent must adapt by picking among the modalities still reporting.
+
+| dropout p | regret vs oracle | per-tick regret |
+|----------:|-----------------:|----------------:|
+| 0.00 |  6.3 +/- 1.7 | 0.011 |
+| 0.05 |  8.6 +/- 1.2 | 0.014 |
+| 0.10 |  8.6 +/- 1.5 | 0.014 |
+| 0.20 |  8.7 +/- 1.8 | 0.015 |
+| 0.40 |  8.0 +/- 1.4 | 0.013 |
+
+Even at 40% dropout the regret grows by only ~25% over the
+no-dropout case; the agent gracefully falls back to whichever
+modalities are still reporting. Source:
+[results/dropout_sweep.csv](results/dropout_sweep.csv),
+[results/figures/dropout_sweep.pdf](results/figures/dropout_sweep.pdf).
+
 ## Horizon sweep
 
 Phase boundaries scale proportionally with the trajectory horizon
