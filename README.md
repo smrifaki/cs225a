@@ -59,7 +59,7 @@ cs225a/
 
 * SCL / OpenSai Control (lab-provided, for the canonical demo)
 * PyBullet 3.2.6 (Kuka iiwa from `pybullet_data`, real rigid-body
-  dynamics; the canonical sim for the decision-layer experiments
+  dynamics; the canonical sim for the sensor-attention experiments
   here when the lab binary is not available)
 * Redis (state interface; SCL convention)
 * C++17, CMake, Eigen, OpenCV, gtest
