@@ -96,14 +96,31 @@ def simulate(seed: int = 0, n_steps: int = 1200) -> dict:
         parentFramePosition=[0, 0, -peg_top_offset],
         childFramePosition=[0, 0, 0],
     )
+    # Disable collision between the peg and every link of the arm
+    # so the "contact force" sensor only registers peg-vs-environment.
+    for link in range(-1, n_joints):
+        p.setCollisionFilterPair(peg, arm, -1, link, 0)
 
     # ---- receiver: 4 walls around a square hole ---------------------
-    # Inner half-side > peg radius so the peg can slide in cleanly.
-    HOLE_HALF = 0.05   # 10cm inner side; peg radius is 1.5cm
+    # Inner half-side just over peg radius so the peg can fit with
+    # tight ~3mm clearance, generating real contact friction when
+    # the OSC controller is even slightly off-center.
+    HOLE_HALF = peg_radius + 0.003  # ~1.8cm half-side, 3.6cm inner
     WALL_T    = 0.02
     WALL_H    = 0.05
-    base_xy   = np.array([0.55, 0.0])
+    hole_xy   = np.array([0.55, 0.0])  # fixed receiver position
     z_base    = 0.05
+
+    # Seed-dependent lateral perturbation of the trajectory target
+    # only. The hole stays at (0.55, 0); the EE aims clearly off
+    # so the peg presses against a wall during insertion. The
+    # offset is larger than the OSC steady-state error so the peg
+    # does land off-center.
+    direction = rng.uniform(0.0, 2 * np.pi)
+    radius    = rng.uniform(0.012, 0.020)
+    target_xy_offset = np.array([radius * np.cos(direction),
+                                 radius * np.sin(direction)])
+    base_xy = hole_xy + target_xy_offset
 
     def wall(cx, cy, sx, sy, sz):
         col = p.createCollisionShape(p.GEOM_BOX, halfExtents=[sx, sy, sz])
@@ -113,7 +130,7 @@ def simulate(seed: int = 0, n_steps: int = 1200) -> dict:
             baseMass=0.0,
             baseCollisionShapeIndex=col,
             baseVisualShapeIndex=vis,
-            basePosition=[base_xy[0] + cx, base_xy[1] + cy, z_base + sz],
+            basePosition=[hole_xy[0] + cx, hole_xy[1] + cy, z_base + sz],
         )
 
     # +x wall, -x wall, +y wall, -y wall
