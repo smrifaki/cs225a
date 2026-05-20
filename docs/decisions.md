@@ -1,52 +1,59 @@
 # Design decisions
 
-Running log of the choices that shape the decision-layer model and
-the headline numbers in [RESULTS.md](../RESULTS.md).
+Running log of the choices that shape the real Kuka iiwa peg-in-
+hole sim and the headline numbers in [RESULTS.md](../RESULTS.md).
 
-## Synthetic peg-in-hole MDP
+## Simulator
 
-* **Four phases (approach, align, contact, insert) with per-phase
-  per-modality sigma.** The phase boundaries are proportional to
-  horizon so the schedule scales linearly with task length; see
-  the horizon sweep in `results/horizon_sweep.csv`.
-* **Three modalities (vision, force, proprio).** A two-modality
-  model has too little structure to test attention; three is the
-  minimum that gives a non-trivial best-modality changing across
-  phases.
+* **PyBullet with the standard `pybullet_data` Kuka iiwa URDF.**
+  The lab's SCL/OpenSai sim is not pip-installable; PyBullet is
+  the closest open alternative used by most robotics research that
+  needs a real 7-DOF arm with full rigid-body dynamics. Used here
+  as the canonical sim for the decision-layer + OSC experiments.
+* **Peg = 3 cm-diameter, 10 cm cylinder** fixed-constrained to
+  the EE link via `createConstraint(JOINT_FIXED)`. The world-
+  aligned offset is computed by `multiplyTransforms` on the EE
+  link's pose (the link frame is not world-aligned for this arm
+  pose; v1 of the sim used the link-frame offset directly and the
+  peg ended up sideways).
+* **Peg vs arm collision filter set to OFF** so the contact-force
+  sensor only registers peg-vs-environment, not the constraint's
+  own internal contact between peg and EE link.
 
-## Posterior update rule
+## Receiver
 
-* **Residual-weighted Bayesian precision update:**
-  `prec_post = prec_pre + r^2 / sigma_obs2`. The earlier "+1
-  precision" update did not depend on the realized residual, which
-  made the per-modality posterior identical across runs and broke
-  any calibration analysis. The residual-weighted update is
-  consistent with a Gaussian likelihood with known obs noise.
+* **4 thin wall boxes around a square hole**, fixed at (0.55, 0).
+  Inner half-side = peg radius + 3 mm so insertion under a small
+  lateral offset always scrapes a wall.
+* **Per-seed trajectory perturbation in [12, 18] mm.** The hole
+  is fixed; the EE aims off-center by a seed-dependent amount and
+  the peg slides along a wall during descent.
 
-## Pick policy
+## Control modes
 
-* **Softmax over EIG with default beta=6.** Beta sweep in
-  `results/beta_sweep.csv` shows beta=6 trades ~5 regret for a
-  small exploration margin vs argmax (beta=20).
-* **EIG approximation:** `0.5 * log1p(r^2 / posterior_var)`. The
-  log1p form avoids divergence when posterior_var is small. Note
-  that this is the *predicted* EIG given r, not the expected EIG
-  marginalised over r; calibration between predicted and realised
-  is a known limitation (see Sensor-dropout robustness section in
-  RESULTS).
+* **Position control (v2).** Per-joint `POSITION_CONTROL` with IK
+  targets per phase. Reaches deep insertion; force dominates
+  contact + insert phases (0.67 → 1.00 share).
+* **Closed-loop OSC torque control (v3).** Real computed-torque
+  control:
+  τ = Jᵀ · Λ · (Kp · Δx − Kv · ẋ) + N · (Kp,post · Δq + Kv,post · q̇) + τ_g
+  with Λ = (J · M⁻¹ · Jᵀ)⁻¹, N = I − M⁻¹ · Jᵀ · Λ · J, and τ_g
+  from `calculateInverseDynamics`. Real τ commanded; force is
+  active during the OSC settle transient.
 
-## Baselines
+## Sensors + pick policy
 
-* **UCB1** with reward = realized residual squared. Sits between
-  BALD and any fixed-policy baseline (regret ~176 vs 6 for BALD, vs
-  425 for phase-aware).
-* **Per-tick oracle** (omniscient) picks the modality with the
-  largest realised EIG at each step. The "phase-aware" baseline is
-  weaker than this oracle because it sees phase but not per-tick
-  realisations.
+* **Three modalities:** vision (rendered 64×64 RGB summarised to
+  a 16-D embedding), force (sum of contact-point normal forces on
+  the peg link), proprio (joint-position deviation from posture).
+* **BALD pick policy** with residual-weighted Bayesian precision
+  update at each tick.
 
-## Compute envelope
+## What is deferred
 
-* **CPU Modal, 8 seeds in parallel via `starmap`.** Each seed runs
-  in seconds; the full pipeline (default + 3 sweeps) is under a
-  minute end to end.
+* Multiple peg geometries (tapered, hexagonal) for the geometry-
+  robustness ablation.
+* OSC reaching the deep-insert configuration with sustained
+  contact, not just transient.
+* Replay against the actual SCL/OpenSai sim when the lab binary
+  is available.
