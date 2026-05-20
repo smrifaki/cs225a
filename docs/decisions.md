@@ -9,7 +9,7 @@ hole sim and the headline numbers in [RESULTS.md](../RESULTS.md).
   The lab's SCL/OpenSai sim is not pip-installable; PyBullet is
   the closest open alternative used by most robotics research that
   needs a real 7-DOF arm with full rigid-body dynamics. Used here
-  as the canonical sim for the decision-layer + OSC experiments.
+  as the canonical sim for the sensor-attention + OSC experiments.
 * **Peg = 3 cm-diameter, 10 cm cylinder** fixed-constrained to
   the EE link via `createConstraint(JOINT_FIXED)`. The world-
   aligned offset is computed by `multiplyTransforms` on the EE
