@@ -1,0 +1,182 @@
+[
+  {
+    "seed": 0,
+    "summary": [
+      {
+        "phase": "approach",
+        "steps": 150,
+        "vision_share": 0.7533333333333333,
+        "force_share": 0.0,
+        "proprio_share": 0.24666666666666667,
+        "mean_residual_vision": 0.4186138439788539,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.3269598248837992
+      },
+      {
+        "phase": "align",
+        "steps": 132,
+        "vision_share": 0.9090909090909091,
+        "force_share": 0.022727272727272728,
+        "proprio_share": 0.06818181818181818,
+        "mean_residual_vision": 0.18436046215580504,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.033666025409021805
+      },
+      {
+        "phase": "contact",
+        "steps": 138,
+        "vision_share": 0.9420289855072463,
+        "force_share": 0.0,
+        "proprio_share": 0.057971014492753624,
+        "mean_residual_vision": 0.36712683787589323,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.03701398781235592
+      },
+      {
+        "phase": "insert",
+        "steps": 180,
+        "vision_share": 1.0,
+        "force_share": 0.0,
+        "proprio_share": 0.0,
+        "mean_residual_vision": 0.33905442411113057,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.021947762026569843
+      }
+    ]
+  },
+  {
+    "seed": 1,
+    "summary": [
+      {
+        "phase": "approach",
+        "steps": 150,
+        "vision_share": 0.72,
+        "force_share": 0.006666666666666667,
+        "proprio_share": 0.2733333333333333,
+        "mean_residual_vision": 0.42626022712829564,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.33897381721091036
+      },
+      {
+        "phase": "align",
+        "steps": 132,
+        "vision_share": 0.9166666666666666,
+        "force_share": 0.05303030303030303,
+        "proprio_share": 0.030303030303030304,
+        "mean_residual_vision": 0.1991657239903881,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.036326222076161284
+      },
+      {
+        "phase": "contact",
+        "steps": 138,
+        "vision_share": 0.9782608695652174,
+        "force_share": 0.014492753623188406,
+        "proprio_share": 0.007246376811594203,
+        "mean_residual_vision": 0.3588365888749182,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.036723018191670544
+      },
+      {
+        "phase": "insert",
+        "steps": 180,
+        "vision_share": 1.0,
+        "force_share": 0.0,
+        "proprio_share": 0.0,
+        "mean_residual_vision": 0.3362728119521775,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.021544859644013918
+      }
+    ]
+  },
+  {
+    "seed": 2,
+    "summary": [
+      {
+        "phase": "approach",
+        "steps": 150,
+        "vision_share": 0.7466666666666667,
+        "force_share": 0.006666666666666667,
+        "proprio_share": 0.24666666666666667,
+        "mean_residual_vision": 0.39725391471264737,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.3120891310308317
+      },
+      {
+        "phase": "align",
+        "steps": 132,
+        "vision_share": 0.7803030303030303,
+        "force_share": 0.09848484848484848,
+        "proprio_share": 0.12121212121212122,
+        "mean_residual_vision": 0.16570452588551568,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.0334498059784732
+      },
+      {
+        "phase": "contact",
+        "steps": 138,
+        "vision_share": 0.9710144927536232,
+        "force_share": 0.0,
+        "proprio_share": 0.028985507246376812,
+        "mean_residual_vision": 0.378524696687845,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.036401444808380694
+      },
+      {
+        "phase": "insert",
+        "steps": 180,
+        "vision_share": 0.9944444444444445,
+        "force_share": 0.0,
+        "proprio_share": 0.005555555555555556,
+        "mean_residual_vision": 0.3479921225563358,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.022011058699671487
+      }
+    ]
+  },
+  {
+    "seed": 3,
+    "summary": [
+      {
+        "phase": "approach",
+        "steps": 150,
+        "vision_share": 0.7533333333333333,
+        "force_share": 0.006666666666666667,
+        "proprio_share": 0.24,
+        "mean_residual_vision": 0.38891494338841975,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.30801011670554296
+      },
+      {
+        "phase": "align",
+        "steps": 132,
+        "vision_share": 0.8181818181818182,
+        "force_share": 0.09090909090909091,
+        "proprio_share": 0.09090909090909091,
+        "mean_residual_vision": 0.16259159519815503,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.033961294359551225
+      },
+      {
+        "phase": "contact",
+        "steps": 138,
+        "vision_share": 0.9637681159420289,
+        "force_share": 0.0,
+        "proprio_share": 0.036231884057971016,
+        "mean_residual_vision": 0.37742648232536447,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.035507629015223474
+      },
+      {
+        "phase": "insert",
+        "steps": 180,
+        "vision_share": 1.0,
+        "force_share": 0.0,
+        "proprio_share": 0.0,
+        "mean_residual_vision": 0.35064331147743794,
+        "mean_residual_force": 0.0,
+        "mean_residual_proprio": 0.023320768993964323
+      }
+    ]
+  }
+]
