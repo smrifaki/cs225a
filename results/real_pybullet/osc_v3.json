@@ -1,0 +1,185 @@
+[
+  {
+    "seed": 0,
+    "n_steps": 1500,
+    "summary": [
+      {
+        "phase": "approach",
+        "steps": 375,
+        "vision_share": 0.005333333333333333,
+        "force_share": 0.44,
+        "proprio_share": 0.5546666666666666,
+        "mean_r_vision": 0.17602906730809476,
+        "mean_r_force": 594.3939176684814,
+        "mean_r_proprio": 1.1549595033353284,
+        "mean_contacts": 1.648,
+        "mean_x_err": 0.037776735167821957,
+        "mean_tau_task": 73.89894696713606
+      },
+      {
+        "phase": "align",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.0,
+        "proprio_share": 1.0,
+        "mean_r_vision": 0.19994727651925112,
+        "mean_r_force": 0.0,
+        "mean_r_proprio": 2.1654114757434164,
+        "mean_contacts": 0.0,
+        "mean_x_err": 0.006510102864980625,
+        "mean_tau_task": 82.44125000956467
+      },
+      {
+        "phase": "contact",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.0,
+        "proprio_share": 1.0,
+        "mean_r_vision": 0.15230302700991066,
+        "mean_r_force": 0.0,
+        "mean_r_proprio": 2.27807433037096,
+        "mean_contacts": 0.0,
+        "mean_x_err": 0.005938448479412185,
+        "mean_tau_task": 76.82531792170894
+      },
+      {
+        "phase": "insert",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.0,
+        "proprio_share": 1.0,
+        "mean_r_vision": 0.12961764140524035,
+        "mean_r_force": 0.0,
+        "mean_r_proprio": 1.968776362467114,
+        "mean_contacts": 0.0,
+        "mean_x_err": 0.019070771819408687,
+        "mean_tau_task": 74.3013177071049
+      }
+    ],
+    "final_ee_z": 0.25953003151152154,
+    "n_contact_ticks": 190,
+    "control_type": "OSC (torque)"
+  },
+  {
+    "seed": 1,
+    "n_steps": 1500,
+    "summary": [
+      {
+        "phase": "approach",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.4186666666666667,
+        "proprio_share": 0.5813333333333334,
+        "mean_r_vision": 0.19065664341928706,
+        "mean_r_force": 471.2343359803461,
+        "mean_r_proprio": 1.2403029995992019,
+        "mean_contacts": 1.4373333333333334,
+        "mean_x_err": 0.03917417832682017,
+        "mean_tau_task": 79.71449524788675
+      },
+      {
+        "phase": "align",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.0,
+        "proprio_share": 1.0,
+        "mean_r_vision": 0.22980724405441963,
+        "mean_r_force": 0.0,
+        "mean_r_proprio": 1.9034336447889497,
+        "mean_contacts": 0.0,
+        "mean_x_err": 0.0058352329594809045,
+        "mean_tau_task": 95.71427570976802
+      },
+      {
+        "phase": "contact",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.0,
+        "proprio_share": 1.0,
+        "mean_r_vision": 0.19878000976644997,
+        "mean_r_force": 0.0,
+        "mean_r_proprio": 1.8743888006620275,
+        "mean_contacts": 0.0,
+        "mean_x_err": 0.004989010019865536,
+        "mean_tau_task": 96.0394094176918
+      },
+      {
+        "phase": "insert",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.0,
+        "proprio_share": 1.0,
+        "mean_r_vision": 0.2537011501026565,
+        "mean_r_force": 0.0,
+        "mean_r_proprio": 1.8013746588871575,
+        "mean_contacts": 0.0,
+        "mean_x_err": 0.016225577403561814,
+        "mean_tau_task": 94.16280844193153
+      }
+    ],
+    "final_ee_z": 0.2575234404960308,
+    "n_contact_ticks": 170,
+    "control_type": "OSC (torque)"
+  },
+  {
+    "seed": 2,
+    "n_steps": 1500,
+    "summary": [
+      {
+        "phase": "approach",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.5146666666666667,
+        "proprio_share": 0.48533333333333334,
+        "mean_r_vision": 0.16473842469194827,
+        "mean_r_force": 901.8526820654164,
+        "mean_r_proprio": 1.044168748324223,
+        "mean_contacts": 1.808,
+        "mean_x_err": 0.04308626806790487,
+        "mean_tau_task": 77.05026730704668
+      },
+      {
+        "phase": "align",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.0,
+        "proprio_share": 1.0,
+        "mean_r_vision": 0.2113898560584895,
+        "mean_r_force": 0.0,
+        "mean_r_proprio": 1.98425120654666,
+        "mean_contacts": 0.0,
+        "mean_x_err": 0.005573480716803934,
+        "mean_tau_task": 90.11177360485702
+      },
+      {
+        "phase": "contact",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.0,
+        "proprio_share": 1.0,
+        "mean_r_vision": 0.2781062234295398,
+        "mean_r_force": 0.0,
+        "mean_r_proprio": 2.3023889925787846,
+        "mean_contacts": 0.0,
+        "mean_x_err": 0.008198127865939908,
+        "mean_tau_task": 74.62651919892951
+      },
+      {
+        "phase": "insert",
+        "steps": 375,
+        "vision_share": 0.0,
+        "force_share": 0.0,
+        "proprio_share": 1.0,
+        "mean_r_vision": 0.2571530123153697,
+        "mean_r_force": 0.0,
+        "mean_r_proprio": 1.9547437303830992,
+        "mean_contacts": 0.0,
+        "mean_x_err": 0.02071192674843152,
+        "mean_tau_task": 58.381755829059095
+      }
+    ],
+    "final_ee_z": 0.25623156957881116,
+    "n_contact_ticks": 210,
+    "control_type": "OSC (torque)"
+  }
+]
